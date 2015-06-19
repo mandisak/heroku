@@ -1,3 +1,4 @@
+var bodyParser = require('body-parser');
 var express = require('express');
 var app = express();
 
@@ -7,26 +8,33 @@ var amqp = require('amqplib').connect(url);
 
 
 app.set('port', (process.env.PORT || 5000));
-app.use(express.static(__dirname + '/public'));
+
+app.use(bodyParser.urlencoded());
+app.use(bodyParser.json());
 
 var when = require('when');
 
-app.get('/:msg', function (request, response) {
+app.get("/", function (request, response) {
+    response.sendfile(__dirname + "\\index.html");
+});
+
+app.post('/', function (request, response) {
     amqp.then(function (conn) {
+        process.once('SIGINT', function () { conn.close(); });
+
         return when(conn.createChannel().then(function (ch) {
-            var msg = request.param("msg")
+            var msg = request.body.message; //request.param("msg")
 
             var ok = ch.assertQueue(q, { durable: false });
 
             return ok.then(function (_qok) {
                 ch.sendToQueue(q, new Buffer(msg));
-                console.log(" [x] Sent '%s'", msg);                
-                return ch.close();
+                console.log(" [x] Sent '%s'", msg);
             });
-        })).ensure(function () { conn.close(); }); ;
+        }))
     }).then(null, console.warn);
 
-    response.send('Sent!');
+    response.sendfile(__dirname + "\\index.html");
 });
 
 app.listen(app.get('port'), function () {
